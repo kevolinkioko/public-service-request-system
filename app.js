@@ -26,8 +26,70 @@ async function loadMine(){
     return;
   }if(!config())return;let r=await db.from("request").select("id,category,location,description,status,created_at,admin_note").eq("citizen_id",user.id).order("created_at",{ascending:false});if(r.error)return say(r.error.message,true);$("myRequests").innerHTML=r.data.length?r.data.map(x=>`<article class="request"><span class="muted">TICKET ${esc(x.id.slice(0,8).toUpperCase())}</span><span class="status ${stat(x.status)}">${esc(x.status)}</span><h3>${esc(x.category)} — ${esc(x.location)}</h3><p>${esc(x.description)}</p><p class="muted">Submitted ${new Date(x.created_at).toLocaleString()} ${x.admin_note?" · Staff note: "+esc(x.admin_note):""}</p></article>`).join(""):'<p class="request">No requests yet. Submit your first request.</p>'}
 async function loadAdmin(){if(!user||!admin){$("adminRequests").innerHTML='<p class="request">Administrator access required.</p>';return}if(!config())return;let r=await db.from("request").select("*").order("created_at",{ascending:false});if(r.error)return say(r.error.message,true);all=r.data;renderAdmin()}
-function renderAdmin(){let counts=["Pending","In Progress","Resolved"]; $("adminMetrics").innerHTML=[["Total",all.length],...counts.map(s=>[s,all.filter(x=>x.status===s).length])].map(([n,v])=>`<div class="metric"><span>${n}</span><b>${v}</b></div>`).join("");let q=($("adminSearch").value||"").trim().toLowerCase();
-let s=$("statusFilter").value;
-let rows=all.filter(x=>(!s||s==="All statuses"||x.status===s)&&[x.id,x.category,x.location,x.description].some(y=>String(y||"").toLowerCase().includes(q)));x=>(!s||x.status===s)&&[x.id,x.category,x.location,x.description].some(y=>String(y||"").toLowerCase().includes(q)));$("adminRequests").innerHTML=rows.length?`<table><thead><tr><th>Ticket/date</th><th>Category/location</th><th>Description</th><th>Status</th><th>Staff note</th><th>Save</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.id.slice(0,8).toUpperCase())}<br>${new Date(x.created_at).toLocaleDateString()}</td><td>${esc(x.category)}<br>${esc(x.location)}</td><td>${esc(x.description)}</td><td><select data-s="${x.id}">${counts.map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select></td><td><input data-n="${x.id}" maxlength="500" value="${esc(x.admin_note||"")}"></td><td><button class="primary" data-save="${x.id}">Save</button></td></tr>`).join("")}</tbody></table>`:'<p class="request">No matching requests.</p>';$("adminRequests").querySelectorAll("[data-save]").forEach(b=>b.onclick=()=>saveRequest(b.dataset.save))}
+
+function renderAdmin() {
+  const counts = ["Pending", "In Progress", "Resolved"];
+
+  $("adminMetrics").innerHTML = [
+    ["Total", all.length],
+    ...counts.map(s => [s, all.filter(x => x.status === s).length])
+  ].map(([n, v]) =>
+    `<div class="metric"><span>${n}</span><b>${v}</b></div>`
+  ).join("");
+
+  const q = ($("adminSearch").value || "").trim().toLowerCase();
+  const s = $("statusFilter").value;
+
+  const rows = all.filter(x =>
+    (!s || s === "All statuses" || x.status === s) &&
+    [x.id, x.category, x.location, x.description]
+      .some(y => String(y || "").toLowerCase().includes(q))
+  );
+
+  $("adminRequests").innerHTML = rows.length
+    ? `<table>
+        <thead>
+          <tr>
+            <th>Ticket/date</th>
+            <th>Category/location</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Staff note</th>
+            <th>Save</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(x => `
+            <tr>
+              <td>${esc(String(x.id).slice(0, 8).toUpperCase())}<br>
+                ${new Date(x.created_at).toLocaleDateString()}
+              </td>
+              <td>${esc(x.category)}<br>${esc(x.location)}</td>
+              <td>${esc(x.description)}</td>
+              <td>
+                <select data-s="${x.id}">
+                  ${counts.map(status =>
+                    `<option value="${status}" ${status === x.status ? "selected" : ""}>${status}</option>`
+                  ).join("")}
+                </select>
+              </td>
+              <td>
+                <input data-n="${x.id}" maxlength="500"
+                  value="${esc(x.admin_note || "")}">
+              </td>
+              <td>
+                <button class="primary" data-save="${x.id}">Save</button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>`
+    : '<p class="request">No matching requests.</p>';
+
+  $("adminRequests").querySelectorAll("[data-save]").forEach(b => {
+    b.onclick = () => saveRequest(b.dataset.save);
+  });
+}
+
 async function saveRequest(id){let r=await db.from("request").update({status:$(`[data-s="${id}"]`).value,admin_note:$(`[data-n="${id}"]`).value.trim(),updated_at:new Date().toISOString()}).eq("id",id);if(r.error)return say(r.error.message,true);say("Request updated.");loadAdmin()}
 document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>go(b.dataset.view));$("authToggle").onclick=async()=>{if(user){await db.auth.signOut();await refresh();say("Signed out.");go("home")}else authForm("signin")};$("heroRequest").onclick=()=>user?go("submit"):authForm("signin");$("trackNew").onclick=()=>user?go("submit"):authForm("signin");document.querySelectorAll("[data-category]").forEach(b=>b.onclick=()=>{if(!user)return authForm("signin");go("submit");$("category").value=b.dataset.category});$("authForm").onsubmit=authSubmit;$("requestForm").onsubmit=submit;$("switchAuth").onclick=()=>authForm("signup");$("forgotPassword").onclick=async()=>{if(!config())return;if(!$("email").value.trim())return say("Enter your email first.",true);let r=await db.auth.resetPasswordForEmail($("email").value.trim(),{redirectTo:location.origin});say(r.error?r.error.message:"If the account exists, a reset email has been sent.",!!r.error)};$("refreshAdmin").onclick=loadAdmin;$("adminSearch").oninput=renderAdmin;$("statusFilter").onchange=renderAdmin;if(db){refresh();db.auth.onAuthStateChange(()=>setTimeout(refresh,0))}else say("Setup required: follow README.md to connect Supabase.",true)});
