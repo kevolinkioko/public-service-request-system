@@ -91,5 +91,30 @@ function renderAdmin() {
   });
 }
 
-async function saveRequest(id){let r=await db.from("request").update({status:$(`[data-s="${id}"]`).value,admin_note:$(`[data-n="${id}"]`).value.trim(),updated_at:new Date().toISOString()}).eq("id",id);if(r.error)return say(r.error.message,true);say("Request updated.");loadAdmin()}
+
+async function saveRequest(id) {
+  const statusInput = document.querySelector(`[data-s="${id}"]`);
+  const noteInput = document.querySelector(`[data-n="${id}"]`);
+
+  if (!statusInput || !noteInput) {
+    return say("Could not find the status dropdown or staff note. Please refresh and try again.", true);
+  }
+
+  const { error } = await db
+    .from("request")
+    .update({
+      status: statusInput.value,
+      admin_note: noteInput.value.trim(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id);
+
+  if (error) {
+    return say(error.message, true);
+  }
+
+  say("Request updated.");
+  await loadAdmin();
+}
+
 document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>go(b.dataset.view));$("authToggle").onclick=async()=>{if(user){await db.auth.signOut();await refresh();say("Signed out.");go("home")}else authForm("signin")};$("heroRequest").onclick=()=>user?go("submit"):authForm("signin");$("trackNew").onclick=()=>user?go("submit"):authForm("signin");document.querySelectorAll("[data-category]").forEach(b=>b.onclick=()=>{if(!user)return authForm("signin");go("submit");$("category").value=b.dataset.category});$("authForm").onsubmit=authSubmit;$("requestForm").onsubmit=submit;$("switchAuth").onclick=()=>authForm("signup");$("forgotPassword").onclick=async()=>{if(!config())return;if(!$("email").value.trim())return say("Enter your email first.",true);let r=await db.auth.resetPasswordForEmail($("email").value.trim(),{redirectTo:location.origin});say(r.error?r.error.message:"If the account exists, a reset email has been sent.",!!r.error)};$("refreshAdmin").onclick=loadAdmin;$("adminSearch").oninput=renderAdmin;$("statusFilter").onchange=renderAdmin;if(db){refresh();db.auth.onAuthStateChange(()=>setTimeout(refresh,0))}else say("Setup required: follow README.md to connect Supabase.",true)});
